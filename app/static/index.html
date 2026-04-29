@@ -213,7 +213,7 @@
         }
       }
 
-      async function createJob(url, mode, format, quality) {
+      async function createJob(url, mode, format, quality, showAlert = true) {
         const body = {
           url,
           mode,
@@ -227,10 +227,13 @@
         });
         if (!res.ok) {
           const err = await res.json();
-          alert(err.detail || "Failed to create job");
-          return;
+          if (showAlert) {
+            alert(err.detail || "Failed to create job");
+          }
+          return false;
         }
         await loadJobs();
+        return true;
       }
 
       async function createDirectDownload(url, mode, format, quality) {
@@ -252,7 +255,11 @@
           });
           if (!res.ok) {
             const err = await res.json();
-            alert(err.detail || "Failed to prepare direct link");
+            directStatus.textContent = "A direct browser link is not available for this source. Preparing a regular download instead.";
+            const queued = await createJob(url, mode, format, quality, false);
+            if (!queued) {
+              alert(err.detail || "Failed to prepare download");
+            }
             return;
           }
           const data = await res.json();
