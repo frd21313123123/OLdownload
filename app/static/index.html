@@ -3,298 +3,506 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Media Downloader</title>
+    <title>OLdownload</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23171717'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial' font-size='22' font-weight='700' fill='white'%3EOL%3C/text%3E%3C/svg%3E" />
     <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f4ee;
+        --panel: #ffffff;
+        --ink: #171717;
+        --muted: #61666f;
+        --line: #d9d6cf;
+        --accent: #126c5b;
+        --accent-strong: #0e5648;
+        --danger: #9d2b22;
+        --soft: #eef6f3;
+        --shadow: 0 18px 55px rgba(38, 34, 27, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: Arial, Helvetica, sans-serif;
-        max-width: 920px;
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 24px;
-        color: #121212;
+        padding: 34px 0;
       }
-      h1 {
-        margin-bottom: 8px;
-      }
-      .form {
-        background: #f5f5f7;
-        border: 1px solid #dcdce0;
-        padding: 16px;
-        border-radius: 8px;
-      }
-      .row {
+
+      .topbar {
         display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
       }
-      label {
-        display: block;
-        font-size: 14px;
-        margin-bottom: 4px;
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 22px;
       }
-      input[type="text"], select, button {
-        padding: 8px 10px;
-        border: 1px solid #bbb;
-        border-radius: 4px;
-      }
-      input[type="text"] {
-        width: 100%;
-        min-width: 360px;
-      }
-      .small {
-        width: 140px;
-      }
-      button {
-        cursor: pointer;
-      }
-      .jobs {
-        margin-top: 24px;
-      }
-      .job {
-        border: 1px solid #ddd;
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        color: #fff;
+        background: var(--ink);
         border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 12px;
+        font-size: 17px;
       }
+
+      .hint {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .search-panel {
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(30px, 4vw, 52px);
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      .sub {
+        margin: 0 0 22px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .input-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        border: 1px solid #bfc3c7;
+        border-radius: 6px;
+        padding: 0 14px;
+        font-size: 15px;
+        color: var(--ink);
+        background: #fff;
+      }
+
+      input:focus {
+        outline: 3px solid rgba(18, 108, 91, 0.18);
+        border-color: var(--accent);
+      }
+
+      button,
+      .download-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 0 16px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+      }
+
+      button:active,
+      .download-link:active {
+        transform: translateY(1px);
+      }
+
+      .primary {
+        color: #fff;
+        background: var(--accent);
+      }
+
+      .primary:hover {
+        background: var(--accent-strong);
+      }
+
+      .primary:disabled {
+        cursor: wait;
+        background: #8aa79f;
+      }
+
+      .download-link {
+        color: #fff;
+        background: #1f4f9a;
+        white-space: nowrap;
+      }
+
       .status {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        background: #e9e9ef;
-        margin-left: 4px;
+        min-height: 20px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 14px;
       }
-      .row-actions {
-        margin-top: 6px;
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .preview {
+        overflow: hidden;
+      }
+
+      .thumb {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 16 / 9;
+        background: #202124;
+        color: #e9ecef;
+      }
+
+      .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .preview-body {
+        padding: 18px;
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .video-title {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+
+      .meta {
         display: flex;
         gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
       }
-      .url-cell {
-        max-width: 100%;
-        overflow-wrap: anywhere;
+
+      .pill {
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        background: #fbfaf7;
       }
-      .warn {
-        margin: 16px 0;
-        color: #7c2a0b;
-        background: #fff4e5;
-        border: 1px solid #ffc58a;
-        padding: 10px;
-        border-radius: 8px;
+
+      .results {
+        grid-column: 1 / -1;
+        padding: 0;
+        overflow: hidden;
       }
-      .notice {
-        margin-top: 8px;
-        color: #174c2f;
-        background: #edf8f1;
-        border: 1px solid #a9dfbd;
-        padding: 10px;
-        border-radius: 8px;
+
+      .results-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .results-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .results-head span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .format-list {
+        display: grid;
+      }
+
+      .format-row {
+        display: grid;
+        grid-template-columns: minmax(120px, 1fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .format-row:last-child {
+        border-bottom: 0;
+      }
+
+      .quality {
+        font-weight: 800;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .empty {
+        padding: 22px 20px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 820px) {
+        main {
+          width: min(100% - 20px, 680px);
+          padding: 18px 0;
+        }
+
+        .topbar,
+        .workspace,
+        .input-row {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .format-row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .download-link {
+          width: 100%;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Local Media Downloader</h1>
-    <div class="warn">
-      This tool is intended for your own use and only for legally permitted content.
-    </div>
-    <div class="form">
-      <div class="row">
-        <div style="flex: 1;">
-          <label for="url">Video or music URL</label>
-          <input type="text" id="url" placeholder="https://www.youtube.com/..." />
+    <main>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">OL</span>
+          <span>OLdownload</span>
         </div>
-      </div>
-      <div class="row">
-        <div>
-          <label for="mode">Mode</label>
-          <select id="mode">
-            <option value="audio">Audio</option>
-            <option value="video">Video</option>
-          </select>
+        <div class="hint">Прямое скачивание без сохранения файла на сервере</div>
+      </header>
+
+      <section class="workspace">
+        <div class="panel search-panel">
+          <h1>Скачать видео по ссылке</h1>
+          <p class="sub">Вставьте ссылку, выберите доступное качество и начните скачивание в браузере.</p>
+          <div class="input-row">
+            <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
+            <button id="analyzeBtn" class="primary">Найти варианты</button>
+          </div>
+          <div id="status" class="status"></div>
         </div>
-        <div>
-          <label for="format">Format</label>
-          <select id="format"></select>
-        </div>
-        <div>
-          <label for="quality">Quality</label>
-          <input type="text" id="quality" class="small" placeholder="192 / best / 1080" />
-        </div>
-        <div style="align-self: end;">
-          <button id="submitBtn">Start download</button>
-        </div>
-      </div>
-      <div id="directStatus" class="notice" hidden></div>
-    </div>
-    <div class="jobs" id="jobs"></div>
-    <script>
-      const modeEl = document.getElementById("mode");
-      const formatEl = document.getElementById("format");
-      const qualityEl = document.getElementById("quality");
-      const urlEl = document.getElementById("url");
-      const submitBtn = document.getElementById("submitBtn");
-      const jobsContainer = document.getElementById("jobs");
-      const directStatus = document.getElementById("directStatus");
 
-      const formatMap = {
-        audio: ["mp3", "m4a", "wav", "flac"],
-        video: ["mp4", "webm"],
-      };
-
-      function fillFormats() {
-        const mode = modeEl.value;
-        formatEl.innerHTML = "";
-        for (const item of formatMap[mode]) {
-          const option = document.createElement("option");
-          option.value = item;
-          option.textContent = item;
-          formatEl.appendChild(option);
-        }
-      }
-
-      function sanitizeStatus(s) {
-        return s || "";
-      }
-
-      function statusColor(status) {
-        if (status === "done") return "#0f7a38";
-        if (status === "error") return "#972c1d";
-        if (status === "cancelled") return "#555";
-        return "#1b5f9e";
-      }
-
-      async function loadJobs() {
-        const res = await fetch("/api/jobs");
-        const jobs = await res.json();
-        jobsContainer.innerHTML = "";
-        for (const job of jobs) {
-          const row = document.createElement("div");
-          row.className = "job";
-          const downloadDisabled = job.status !== "done";
-
-          const info = document.createElement("div");
-          info.innerHTML = `
-            <div><strong>id:</strong> ${job.id}</div>
-            <div class="url-cell"><strong>url:</strong> ${job.url}</div>
-            <div><strong>mode:</strong> ${job.mode}, <strong>format:</strong> ${job.format}, <strong>quality:</strong> ${job.quality || "-"}</div>
-            <div>
-              <strong>status:</strong>
-              <span class="status" style="color:${statusColor(job.status)}">${job.status}</span>
-              ${job.progress ? `<strong>progress:</strong> ${job.progress}%` : ""}
+        <aside id="preview" class="panel preview">
+          <div class="thumb" id="thumb">Вставьте ссылку</div>
+          <div class="preview-body">
+            <p class="eyebrow" id="previewState">Ожидание ссылки</p>
+            <h2 id="videoTitle" class="video-title">Выберите доступный готовый файл</h2>
+            <div id="meta" class="meta">
+              <span class="pill">MP4/WebM</span>
+              <span class="pill">Без файла на сервере</span>
             </div>
-            <div>${sanitizeStatus(job.message)}</div>
-            <div>${job.file_size ? `size: ${Math.round(job.file_size / 1024 / 1024)} MB` : ""}</div>
-            ${job.error ? `<div style="color:#972c1d">${job.error}</div>` : ""}
-          `;
+          </div>
+        </aside>
 
-          const actions = document.createElement("div");
-          actions.className = "row-actions";
-          const dl = document.createElement("button");
-          dl.textContent = "Download file";
-          dl.disabled = downloadDisabled;
-          dl.onclick = () => window.open(`/api/download/${job.id}`, "_blank");
+        <section id="results" class="panel results" hidden>
+          <div class="results-head">
+            <h2>Доступные варианты</h2>
+            <span id="resultCount"></span>
+          </div>
+          <div id="formatList" class="format-list"></div>
+        </section>
+      </section>
+    </main>
 
-          const again = document.createElement("button");
-          again.textContent = "Retry";
-          again.onclick = () => createJob(job.url, job.mode, job.format, job.quality);
+    <script>
+      const urlEl = document.getElementById("url");
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const statusEl = document.getElementById("status");
+      const previewEl = document.getElementById("preview");
+      const thumbEl = document.getElementById("thumb");
+      const previewStateEl = document.getElementById("previewState");
+      const titleEl = document.getElementById("videoTitle");
+      const metaEl = document.getElementById("meta");
+      const resultsEl = document.getElementById("results");
+      const resultCountEl = document.getElementById("resultCount");
+      const formatListEl = document.getElementById("formatList");
 
-          const remove = document.createElement("button");
-          remove.textContent = "Remove";
-          remove.onclick = async () => {
-            await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
-            await loadJobs();
-          };
+      function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.classList.toggle("error", isError);
+      }
 
-          actions.appendChild(dl);
-          actions.appendChild(again);
-          actions.appendChild(remove);
-          row.appendChild(info);
-          row.appendChild(actions);
-          jobsContainer.appendChild(row);
+      function formatDuration(seconds) {
+        if (!seconds) return null;
+        const mins = Math.floor(seconds / 60);
+        const secs = String(seconds % 60).padStart(2, "0");
+        return `${mins}:${secs}`;
+      }
+
+      function formatSize(bytes) {
+        if (!bytes) return "-";
+        if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+        return `${Math.round(bytes / 1024 / 1024)} MB`;
+      }
+
+      function renderPreview(data) {
+        previewEl.hidden = false;
+        previewStateEl.textContent = "Источник найден";
+        titleEl.textContent = data.title || "Видео";
+        thumbEl.innerHTML = "";
+        if (data.thumbnail) {
+          const img = document.createElement("img");
+          img.src = data.thumbnail;
+          img.alt = "";
+          thumbEl.appendChild(img);
+        } else {
+          thumbEl.textContent = "Видео";
+        }
+        metaEl.innerHTML = "";
+        const duration = formatDuration(data.duration);
+        if (duration) addPill(duration);
+        addPill(`${data.formats.length} вариантов`);
+      }
+
+      function addPill(text) {
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.textContent = text;
+        metaEl.appendChild(pill);
+      }
+
+      function renderFormats(data, sourceUrl) {
+        resultsEl.hidden = false;
+        resultCountEl.textContent = data.formats.length ? `${data.formats.length} найдено` : "";
+        formatListEl.innerHTML = "";
+
+        if (!data.formats.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "Для этой ссылки нет готового файла с видео и звуком. Без сохранения или склейки на сервере скачать один файл нельзя.";
+          formatListEl.appendChild(empty);
+          return;
+        }
+
+        for (const item of data.formats) {
+          const row = document.createElement("div");
+          row.className = "format-row";
+
+          const quality = document.createElement("div");
+          quality.className = "quality";
+          quality.textContent = item.resolution;
+
+          const format = document.createElement("div");
+          format.className = "muted";
+          format.textContent = item.ext.toUpperCase();
+
+          const size = document.createElement("div");
+          size.className = "muted";
+          size.textContent = formatSize(item.filesize);
+
+          const link = document.createElement("a");
+          link.className = "download-link";
+          link.textContent = "Скачать";
+          link.href = `/api/stream?${new URLSearchParams({ url: sourceUrl, format_id: item.format_id }).toString()}`;
+          link.addEventListener("click", () => {
+            setStatus("Скачивание началось. Окно можно не закрывать.");
+          });
+
+          row.appendChild(quality);
+          row.appendChild(format);
+          row.appendChild(size);
+          row.appendChild(link);
+          formatListEl.appendChild(row);
         }
       }
 
-      async function createJob(url, mode, format, quality, showAlert = true) {
-        const body = {
-          url,
-          mode,
-          format,
-          quality,
-        };
-        const res = await fetch("/api/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          if (showAlert) {
-            alert(err.detail || "Failed to create job");
-          }
-          return false;
+      async function analyze() {
+        const sourceUrl = urlEl.value.trim();
+        if (!sourceUrl) {
+          setStatus("Вставьте ссылку на видео.", true);
+          return;
         }
-        await loadJobs();
-        return true;
-      }
 
-      async function createDirectDownload(url, mode, format, quality) {
-        const body = {
-          url,
-          mode,
-          format,
-          quality,
-        };
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Preparing link...";
-        directStatus.hidden = false;
-        directStatus.textContent = "Preparing a direct link. The file will be downloaded by your browser, not saved on this server.";
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = "Ищу...";
+        setStatus("Проверяю доступные форматы...");
+        resultsEl.hidden = true;
+        previewStateEl.textContent = "Проверка ссылки";
+        titleEl.textContent = "Читаю доступные варианты";
+        thumbEl.innerHTML = "";
+        thumbEl.textContent = "Поиск";
+        metaEl.innerHTML = "";
+        addPill("Анализ");
+
         try {
-          const res = await fetch("/api/direct-link", {
+          const res = await fetch("/api/formats", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ url: sourceUrl }),
           });
+          const data = await res.json();
           if (!res.ok) {
-            const err = await res.json();
-            directStatus.textContent = "A direct browser link is not available for this source. Preparing a regular download instead.";
-            const queued = await createJob(url, mode, format, quality, false);
-            if (!queued) {
-              alert(err.detail || "Failed to prepare download");
-            }
+            setStatus(data.detail || "Не удалось прочитать ссылку.", true);
             return;
           }
-          const data = await res.json();
-          const link = document.createElement("a");
-          link.href = data.url;
-          link.target = "_blank";
-          link.rel = "noopener";
-          link.download = "";
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          directStatus.textContent = "Direct link opened. If the browser shows the video instead of saving it, use the browser's save command.";
+          renderPreview(data);
+          renderFormats(data, sourceUrl);
+          setStatus(data.formats.length ? "Выберите качество для скачивания." : "Готовых прямых файлов не найдено.", !data.formats.length);
+        } catch (_error) {
+          setStatus("Сервер не ответил. Попробуйте еще раз.", true);
         } finally {
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Start download";
+          analyzeBtn.disabled = false;
+          analyzeBtn.textContent = "Найти варианты";
         }
       }
 
-      submitBtn.addEventListener("click", () => {
-        const url = urlEl.value.trim();
-        if (!url) {
-          alert("Enter URL");
-          return;
-        }
-        if (modeEl.value === "video") {
-          createDirectDownload(url, modeEl.value, formatEl.value, qualityEl.value.trim() || null);
-          return;
-        }
-        createJob(url, modeEl.value, formatEl.value, qualityEl.value.trim() || null);
+      analyzeBtn.addEventListener("click", analyze);
+      urlEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") analyze();
       });
-
-      modeEl.addEventListener("change", fillFormats);
-      fillFormats();
-      loadJobs();
-      setInterval(loadJobs, 2000);
     </script>
   </body>
 </html>

@@ -28,6 +28,15 @@ class DownloadRequest(BaseModel):
     quality: Optional[str] = Field(default=None, min_length=1, max_length=16)
 
 
+class FormatRequest(BaseModel):
+    url: HttpUrl
+
+
+class DirectLinkRequest(BaseModel):
+    url: HttpUrl
+    format_id: str = Field(min_length=1, max_length=64)
+
+
 class DownloadJob(BaseModel):
     id: str
     url: str
@@ -52,6 +61,24 @@ class DownloadResponse(BaseModel):
 
 class DirectDownloadResponse(BaseModel):
     url: str
+
+
+class DirectFormat(BaseModel):
+    format_id: str
+    ext: str
+    label: str
+    resolution: str
+    height: Optional[int] = None
+    fps: Optional[float] = None
+    filesize: Optional[int] = None
+    tbr: Optional[float] = None
+
+
+class FormatResponse(BaseModel):
+    title: str
+    thumbnail: Optional[str] = None
+    duration: Optional[int] = None
+    formats: list[DirectFormat]
 
 
 class ErrorResponse(BaseModel):

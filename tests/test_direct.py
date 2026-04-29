@@ -1,30 +1,69 @@
+import json
 import subprocess
 
-from app.direct import _single_file_format_selectors, resolve_direct_video_link
+from app.direct import build_stream_command, inspect_direct_video, safe_download_filename
 
 
-def test_direct_selector_fallbacks():
-    assert _single_file_format_selectors("mp4", "720") == [
-        "best[ext=mp4][vcodec!=none][acodec!=none][height<=720]",
-        "best[ext=mp4][vcodec!=none][acodec!=none]",
-        "best[vcodec!=none][acodec!=none][height<=720]",
-        "best[vcodec!=none][acodec!=none]",
-    ]
-
-
-def test_resolve_direct_link_tries_next_selector(monkeypatch):
-    calls = []
+def test_inspect_direct_video_filters_single_file_formats(monkeypatch):
+    payload = {
+        "title": "Example video",
+        "thumbnail": "https://img.example/thumb.jpg",
+        "duration": 120,
+        "formats": [
+            {
+                "format_id": "22",
+                "ext": "mp4",
+                "url": "https://media.example/720.mp4",
+                "protocol": "https",
+                "vcodec": "avc1",
+                "acodec": "mp4a",
+                "height": 720,
+                "width": 1280,
+                "fps": 30,
+                "filesize": 1000,
+                "tbr": 1500,
+            },
+            {
+                "format_id": "137",
+                "ext": "mp4",
+                "url": "https://media.example/video-only.mp4",
+                "protocol": "https",
+                "vcodec": "avc1",
+                "acodec": "none",
+                "height": 1080,
+            },
+            {
+                "format_id": "hls",
+                "ext": "mp4",
+                "url": "https://media.example/playlist.m3u8",
+                "protocol": "m3u8_native",
+                "vcodec": "avc1",
+                "acodec": "mp4a",
+                "height": 1080,
+            },
+        ],
+    }
 
     def fake_run(command, **_kwargs):
-        calls.append(command)
-        if len(calls) == 1:
-            return subprocess.CompletedProcess(command, 1, stdout="", stderr="missing format")
-        return subprocess.CompletedProcess(command, 0, stdout="https://media.example/video.mp4\n", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(payload), stderr="")
 
     monkeypatch.setattr("app.direct.subprocess.run", fake_run)
 
-    media = resolve_direct_video_link("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "mp4", "720")
+    media = inspect_direct_video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
-    assert media.url == "https://media.example/video.mp4"
-    assert calls[0][calls[0].index("-f") + 1] == "best[ext=mp4][vcodec!=none][acodec!=none][height<=720]"
-    assert calls[1][calls[1].index("-f") + 1] == "best[ext=mp4][vcodec!=none][acodec!=none]"
+    assert media.title == "Example video"
+    assert len(media.formats) == 1
+    assert media.formats[0].format_id == "22"
+    assert media.formats[0].resolution == "720p"
+
+
+def test_build_stream_command_uses_stdout():
+    command = build_stream_command("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "22")
+
+    assert "-o" in command
+    assert command[command.index("-o") + 1] == "-"
+    assert command[command.index("-f") + 1] == "22"
+
+
+def test_safe_download_filename():
+    assert safe_download_filename("Плохое:/ Name?", "mp4") == "Плохое Name.mp4"

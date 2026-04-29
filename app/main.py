@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import uuid
+import subprocess
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import DOWNLOAD_DIR, STATIC_DIR
-from .direct import resolve_direct_video_link
+from .direct import build_stream_command, inspect_direct_video, resolve_direct_video_link_by_id, safe_download_filename, stream_process_stdout
 from .manager import DownloadManager
-from .schemas import DirectDownloadResponse, DownloadJob, DownloadMode, DownloadRequest, ErrorResponse, JobStatus, DownloadResponse
+from .schemas import DirectDownloadResponse, DirectFormat, DirectLinkRequest, DownloadJob, DownloadMode, DownloadRequest, ErrorResponse, FormatRequest, FormatResponse, JobStatus, DownloadResponse
 from .utils import normalize_url, validate_mode_and_format
 
 manager = DownloadManager()
@@ -69,20 +71,65 @@ def create_download(payload: DownloadRequest) -> DownloadResponse:
     return DownloadResponse(id=job_id, status=job.status)
 
 
-@app.post("/api/direct-link", response_model=DirectDownloadResponse, responses={400: {"model": ErrorResponse}})
-def create_direct_link(payload: DownloadRequest) -> DirectDownloadResponse:
+@app.post("/api/formats", response_model=FormatResponse, responses={400: {"model": ErrorResponse}})
+def list_direct_formats(payload: FormatRequest) -> FormatResponse:
     try:
         normalized_url = normalize_url(str(payload.url))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if payload.mode != DownloadMode.video:
-        raise HTTPException(status_code=400, detail="Direct links are supported for video only")
     try:
-        fmt, quality = validate_mode_and_format(payload.mode.value, payload.format, payload.quality)
-        media = resolve_direct_video_link(normalized_url, fmt, quality)
+        media = inspect_direct_video(normalized_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return FormatResponse(
+        title=media.title,
+        thumbnail=media.thumbnail,
+        duration=media.duration,
+        formats=[DirectFormat(**item.__dict__) for item in media.formats],
+    )
+
+
+@app.post("/api/direct-link", response_model=DirectDownloadResponse, responses={400: {"model": ErrorResponse}})
+def create_direct_link(payload: DirectLinkRequest) -> DirectDownloadResponse:
+    try:
+        normalized_url = normalize_url(str(payload.url))
+        media = resolve_direct_video_link_by_id(normalized_url, payload.format_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return DirectDownloadResponse(url=media.url)
+
+
+@app.get("/api/stream", responses={400: {"model": ErrorResponse}})
+def stream_direct_file(url: str = Query(min_length=1), format_id: str = Query(min_length=1, max_length=64)):
+    try:
+        normalized_url = normalize_url(url)
+        media = inspect_direct_video(normalized_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    selected = next((item for item in media.formats if item.format_id == format_id), None)
+    if not selected:
+        raise HTTPException(status_code=400, detail="The selected direct format is no longer available")
+
+    try:
+        process = subprocess.Popen(
+            build_stream_command(normalized_url, format_id),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="yt-dlp is not installed or not available in PATH")
+
+    filename = safe_download_filename(media.title, selected.ext)
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        "Cache-Control": "no-store",
+    }
+    return StreamingResponse(
+        stream_process_stdout(process),
+        media_type="application/octet-stream",
+        headers=headers,
+    )
 
 
 @app.get("/api/jobs")
