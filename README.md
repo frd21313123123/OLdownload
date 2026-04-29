@@ -14,6 +14,7 @@ Supported sources:
 - Track per-job status and progress
 - Retry or remove jobs from the UI
 - Download finished files via API
+- Download videos directly in the user's browser without storing them on the server when the source provides a single-file stream
 - In-process cleanup of old files and jobs
 
 ## Quick start
@@ -34,6 +35,9 @@ Supported sources:
 ## API
 - `POST /api/download`
   - body: `{ url, mode: "audio"|"video", format, quality }`
+- `POST /api/direct-link`
+  - body: `{ url, mode: "video", format, quality }`
+  - returns `{ url }` with a temporary direct media URL
 - `GET /api/jobs`
 - `GET /api/jobs/{id}`
 - `DELETE /api/jobs/{id}`
@@ -44,4 +48,5 @@ Supported sources:
 - This app is built for local/private use.
 - Ensure `yt-dlp` and `ffmpeg` are installed in your system PATH.
 - Output files are stored under `downloads/<job_id>/`.
+- Direct video links are temporary and depend on whether the source exposes a single downloadable video stream for the selected format/quality.
 - Use legally compliant sources and content only.

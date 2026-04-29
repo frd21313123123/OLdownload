@@ -50,5 +50,9 @@ class DownloadResponse(BaseModel):
     status: JobStatus
 
 
+class DirectDownloadResponse(BaseModel):
+    url: str
+
+
 class ErrorResponse(BaseModel):
     detail: str

@@ -10,8 +10,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import DOWNLOAD_DIR, STATIC_DIR
+from .direct import resolve_direct_video_link
 from .manager import DownloadManager
-from .schemas import DownloadJob, DownloadMode, DownloadRequest, ErrorResponse, JobStatus, DownloadResponse
+from .schemas import DirectDownloadResponse, DownloadJob, DownloadMode, DownloadRequest, ErrorResponse, JobStatus, DownloadResponse
 from .utils import normalize_url, validate_mode_and_format
 
 manager = DownloadManager()
@@ -66,6 +67,22 @@ def create_download(payload: DownloadRequest) -> DownloadResponse:
     )
     manager.submit_job(job)
     return DownloadResponse(id=job_id, status=job.status)
+
+
+@app.post("/api/direct-link", response_model=DirectDownloadResponse, responses={400: {"model": ErrorResponse}})
+def create_direct_link(payload: DownloadRequest) -> DirectDownloadResponse:
+    try:
+        normalized_url = normalize_url(str(payload.url))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if payload.mode != DownloadMode.video:
+        raise HTTPException(status_code=400, detail="Direct links are supported for video only")
+    try:
+        fmt, quality = validate_mode_and_format(payload.mode.value, payload.format, payload.quality)
+        media = resolve_direct_video_link(normalized_url, fmt, quality)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return DirectDownloadResponse(url=media.url)
 
 
 @app.get("/api/jobs")

@@ -81,6 +81,14 @@
         padding: 10px;
         border-radius: 8px;
       }
+      .notice {
+        margin-top: 8px;
+        color: #174c2f;
+        background: #edf8f1;
+        border: 1px solid #a9dfbd;
+        padding: 10px;
+        border-radius: 8px;
+      }
     </style>
   </head>
   <body>
@@ -115,6 +123,7 @@
           <button id="submitBtn">Start download</button>
         </div>
       </div>
+      <div id="directStatus" class="notice" hidden></div>
     </div>
     <div class="jobs" id="jobs"></div>
     <script>
@@ -124,6 +133,7 @@
       const urlEl = document.getElementById("url");
       const submitBtn = document.getElementById("submitBtn");
       const jobsContainer = document.getElementById("jobs");
+      const directStatus = document.getElementById("directStatus");
 
       const formatMap = {
         audio: ["mp3", "m4a", "wav", "flac"],
@@ -223,10 +233,52 @@
         await loadJobs();
       }
 
+      async function createDirectDownload(url, mode, format, quality) {
+        const body = {
+          url,
+          mode,
+          format,
+          quality,
+        };
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Preparing link...";
+        directStatus.hidden = false;
+        directStatus.textContent = "Preparing a direct link. The file will be downloaded by your browser, not saved on this server.";
+        try {
+          const res = await fetch("/api/direct-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail || "Failed to prepare direct link");
+            return;
+          }
+          const data = await res.json();
+          const link = document.createElement("a");
+          link.href = data.url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.download = "";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          directStatus.textContent = "Direct link opened. If the browser shows the video instead of saving it, use the browser's save command.";
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Start download";
+        }
+      }
+
       submitBtn.addEventListener("click", () => {
         const url = urlEl.value.trim();
         if (!url) {
           alert("Enter URL");
+          return;
+        }
+        if (modeEl.value === "video") {
+          createDirectDownload(url, modeEl.value, formatEl.value, qualityEl.value.trim() || null);
           return;
         }
         createJob(url, modeEl.value, formatEl.value, qualityEl.value.trim() || null);
