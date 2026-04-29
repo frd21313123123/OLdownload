@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import os
 import uuid
 
 from fastapi.testclient import TestClient
@@ -147,3 +148,18 @@ def test_completed_server_file_expires_after_ttl():
 
     assert not work_dir.exists()
     assert main.manager.get_job(job_id) is None
+
+
+def test_orphaned_server_file_expires_after_ttl():
+    job_id = uuid.uuid4().hex
+    work_dir = DOWNLOAD_DIR / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    file_path = work_dir / f"{job_id}.mp4"
+    file_path.write_bytes(b"video")
+    old_time = datetime.now(timezone.utc).timestamp() - JOB_TTL_SECONDS - 1
+    os.utime(work_dir, (old_time, old_time))
+    os.utime(file_path, (old_time, old_time))
+
+    main.manager.cleanup_expired_jobs()
+
+    assert not work_dir.exists()

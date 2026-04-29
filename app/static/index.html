@@ -540,7 +540,11 @@
         card.innerHTML = "";
         const info = document.createElement("div");
         const progress = job.progress ? ` · ${job.progress}%` : "";
-        info.innerHTML = `<strong>Подготовка файла</strong><p>${job.status}${progress}</p><p>${job.message || ""}</p>`;
+        const statusText = serverStatusText(job.status);
+        const hint = job.status === "downloading" && job.progress >= 99
+          ? "Почти готово: сервер скачал части файла и завершает обработку."
+          : "";
+        info.innerHTML = `<strong>Подготовка файла</strong><p>${statusText}${progress}</p><p>${job.message || ""}</p><p>${hint}</p>`;
         card.appendChild(info);
 
         if (job.status === "done") {
@@ -563,6 +567,18 @@
           retry.onclick = () => startServerDownload(job.url, retry, card);
           card.appendChild(retry);
         }
+      }
+
+      function serverStatusText(status) {
+        const labels = {
+          queued: "В очереди",
+          downloading: "Скачивание",
+          converting: "Обработка",
+          done: "Готово",
+          error: "Ошибка",
+          cancelled: "Отменено",
+        };
+        return labels[status] || status;
       }
 
       async function analyze() {

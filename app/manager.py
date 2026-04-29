@@ -17,6 +17,15 @@ from .utils import KNOWN_EXTENSIONS, choose_output_file, is_spotify_url, spotify
 
 
 _PROGRESS_RE = re.compile(r"\[download\]\s+(\d+(?:\.\d+)?)%")
+_PROCESSING_MARKERS = (
+    "[Merger]",
+    "[ExtractAudio]",
+    "[VideoConvertor]",
+    "[Fixup",
+    "[MoveFiles]",
+    "Merging formats",
+    "Deleting original file",
+)
 
 
 @dataclass
@@ -97,6 +106,7 @@ class DownloadManager:
         to_delete = self._expired_job_ids(now)
         for job_id in to_delete:
             self._delete_job(job_id)
+        self._remove_orphaned_storage()
 
     def _worker_loop(self) -> None:
         while not self._stop.is_set():
@@ -238,19 +248,38 @@ class DownloadManager:
         return True
 
     def _handle_progress_line(self, state: _JobState, line: str) -> None:
+        stripped = line.strip()
+        if any(marker in stripped for marker in _PROCESSING_MARKERS):
+            self._set_status(state, JobStatus.converting, self._friendly_progress_message(stripped))
+            return
+
         progress_match = _PROGRESS_RE.search(line)
         if progress_match:
             percent = int(float(progress_match.group(1)))
-            self._set_progress(state, max(0, min(100, percent)), line.strip())
-
-        if "Destination:" in line and ("ExtractAudio" in line or "ffmpeg" in line):
-            self._set_status(state, JobStatus.converting, line.strip())
+            if percent >= 100 and state.job.status != JobStatus.done:
+                percent = 99
+            self._set_progress(state, max(0, min(99, percent)), self._friendly_progress_message(stripped))
 
     def _set_progress(self, state: _JobState, percent: int, message: str) -> None:
         with self._lock:
             state.job.progress = percent
             state.job.message = message
             state.job.updated_at = datetime.now(timezone.utc)
+
+    def _friendly_progress_message(self, line: str) -> str:
+        if "[Merger]" in line or "Merging formats" in line:
+            return "Склеиваю видео и звук"
+        if "[ExtractAudio]" in line:
+            return "Извлекаю аудио"
+        if "[VideoConvertor]" in line:
+            return "Конвертирую видео"
+        if "[Fixup" in line:
+            return "Проверяю контейнер файла"
+        if "[MoveFiles]" in line or "Deleting original file" in line:
+            return "Финализирую файл"
+        if line.startswith("[download]"):
+            return "Скачиваю части файла"
+        return line
 
     def _is_cancelled(self, state: _JobState) -> bool:
         return state.job.status == JobStatus.cancelled
@@ -318,8 +347,12 @@ class DownloadManager:
 
     def _remove_orphaned_storage(self) -> None:
         now = time.time()
+        with self._lock:
+            active_job_ids = set(self._jobs)
         for work_dir in DOWNLOAD_DIR.iterdir():
             if not work_dir.is_dir():
+                continue
+            if work_dir.name in active_job_ids:
                 continue
             try:
                 if now - work_dir.stat().st_mtime >= JOB_TTL_SECONDS:
