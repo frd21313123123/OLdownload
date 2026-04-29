@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Media Downloader</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 24px;
+        color: #121212;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      .form {
+        background: #f5f5f7;
+        border: 1px solid #dcdce0;
+        padding: 16px;
+        border-radius: 8px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      input[type="text"], select, button {
+        padding: 8px 10px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+      }
+      input[type="text"] {
+        width: 100%;
+        min-width: 360px;
+      }
+      .small {
+        width: 140px;
+      }
+      button {
+        cursor: pointer;
+      }
+      .jobs {
+        margin-top: 24px;
+      }
+      .job {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .status {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: #e9e9ef;
+        margin-left: 4px;
+      }
+      .row-actions {
+        margin-top: 6px;
+        display: flex;
+        gap: 8px;
+      }
+      .url-cell {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .warn {
+        margin: 16px 0;
+        color: #7c2a0b;
+        background: #fff4e5;
+        border: 1px solid #ffc58a;
+        padding: 10px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Local Media Downloader</h1>
+    <div class="warn">
+      This tool is intended for your own use and only for legally permitted content.
+    </div>
+    <div class="form">
+      <div class="row">
+        <div style="flex: 1;">
+          <label for="url">Video or music URL</label>
+          <input type="text" id="url" placeholder="https://www.youtube.com/..." />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="audio">Audio</option>
+            <option value="video">Video</option>
+          </select>
+        </div>
+        <div>
+          <label for="format">Format</label>
+          <select id="format"></select>
+        </div>
+        <div>
+          <label for="quality">Quality</label>
+          <input type="text" id="quality" class="small" placeholder="192 / best / 1080" />
+        </div>
+        <div style="align-self: end;">
+          <button id="submitBtn">Start download</button>
+        </div>
+      </div>
+    </div>
+    <div class="jobs" id="jobs"></div>
+    <script>
+      const modeEl = document.getElementById("mode");
+      const formatEl = document.getElementById("format");
+      const qualityEl = document.getElementById("quality");
+      const urlEl = document.getElementById("url");
+      const submitBtn = document.getElementById("submitBtn");
+      const jobsContainer = document.getElementById("jobs");
+
+      const formatMap = {
+        audio: ["mp3", "m4a", "wav", "flac"],
+        video: ["mp4", "webm"],
+      };
+
+      function fillFormats() {
+        const mode = modeEl.value;
+        formatEl.innerHTML = "";
+        for (const item of formatMap[mode]) {
+          const option = document.createElement("option");
+          option.value = item;
+          option.textContent = item;
+          formatEl.appendChild(option);
+        }
+      }
+
+      function sanitizeStatus(s) {
+        return s || "";
+      }
+
+      function statusColor(status) {
+        if (status === "done") return "#0f7a38";
+        if (status === "error") return "#972c1d";
+        if (status === "cancelled") return "#555";
+        return "#1b5f9e";
+      }
+
+      async function loadJobs() {
+        const res = await fetch("/api/jobs");
+        const jobs = await res.json();
+        jobsContainer.innerHTML = "";
+        for (const job of jobs) {
+          const row = document.createElement("div");
+          row.className = "job";
+          const downloadDisabled = job.status !== "done";
+
+          const info = document.createElement("div");
+          info.innerHTML = `
+            <div><strong>id:</strong> ${job.id}</div>
+            <div class="url-cell"><strong>url:</strong> ${job.url}</div>
+            <div><strong>mode:</strong> ${job.mode}, <strong>format:</strong> ${job.format}, <strong>quality:</strong> ${job.quality || "-"}</div>
+            <div>
+              <strong>status:</strong>
+              <span class="status" style="color:${statusColor(job.status)}">${job.status}</span>
+              ${job.progress ? `<strong>progress:</strong> ${job.progress}%` : ""}
+            </div>
+            <div>${sanitizeStatus(job.message)}</div>
+            <div>${job.file_size ? `size: ${Math.round(job.file_size / 1024 / 1024)} MB` : ""}</div>
+            ${job.error ? `<div style="color:#972c1d">${job.error}</div>` : ""}
+          `;
+
+          const actions = document.createElement("div");
+          actions.className = "row-actions";
+          const dl = document.createElement("button");
+          dl.textContent = "Download file";
+          dl.disabled = downloadDisabled;
+          dl.onclick = () => window.open(`/api/download/${job.id}`, "_blank");
+
+          const again = document.createElement("button");
+          again.textContent = "Retry";
+          again.onclick = () => createJob(job.url, job.mode, job.format, job.quality);
+
+          const remove = document.createElement("button");
+          remove.textContent = "Remove";
+          remove.onclick = async () => {
+            await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
+            await loadJobs();
+          };
+
+          actions.appendChild(dl);
+          actions.appendChild(again);
+          actions.appendChild(remove);
+          row.appendChild(info);
+          row.appendChild(actions);
+          jobsContainer.appendChild(row);
+        }
+      }
+
+      async function createJob(url, mode, format, quality) {
+        const body = {
+          url,
+          mode,
+          format,
+          quality,
+        };
+        const res = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.detail || "Failed to create job");
+          return;
+        }
+        await loadJobs();
+      }
+
+      submitBtn.addEventListener("click", () => {
+        const url = urlEl.value.trim();
+        if (!url) {
+          alert("Enter URL");
+          return;
+        }
+        createJob(url, modeEl.value, formatEl.value, qualityEl.value.trim() || null);
+      });
+
+      modeEl.addEventListener("change", fillFormats);
+      fillFormats();
+      loadJobs();
+      setInterval(loadJobs, 2000);
+    </script>
+  </body>
+</html>
