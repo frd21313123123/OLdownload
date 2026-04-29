@@ -286,6 +286,36 @@
         line-height: 1.5;
       }
 
+      .server-card {
+        display: grid;
+        gap: 12px;
+        padding: 18px 20px;
+        border-top: 1px solid var(--line);
+        background: var(--soft);
+      }
+
+      .server-card strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .server-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .secondary {
+        width: fit-content;
+        color: var(--accent);
+        background: #fff;
+        border-color: #9bc9bd;
+      }
+
+      .secondary:hover {
+        border-color: var(--accent);
+      }
+
       [hidden] {
         display: none !important;
       }
@@ -422,8 +452,9 @@
         if (!data.formats.length) {
           const empty = document.createElement("div");
           empty.className = "empty";
-          empty.textContent = "Для этой ссылки нет готового файла с видео и звуком. Без сохранения или склейки на сервере скачать один файл нельзя.";
+          empty.textContent = "Для этой ссылки нет готового файла с видео и звуком. Можно подготовить файл на сервере: он удалится сразу после скачивания или автоматически через 30 минут после готовности.";
           formatListEl.appendChild(empty);
+          formatListEl.appendChild(createServerFallback(sourceUrl));
           return;
         }
 
@@ -456,6 +487,81 @@
           row.appendChild(size);
           row.appendChild(link);
           formatListEl.appendChild(row);
+        }
+      }
+
+      function createServerFallback(sourceUrl) {
+        const card = document.createElement("div");
+        card.className = "server-card";
+        const text = document.createElement("div");
+        text.innerHTML = "<strong>Резервный способ</strong><p>Сервер временно соберет файл, но не будет хранить его постоянно.</p>";
+        const action = document.createElement("button");
+        action.className = "secondary";
+        action.textContent = "Подготовить файл";
+        action.onclick = () => startServerDownload(sourceUrl, action, card);
+        card.appendChild(text);
+        card.appendChild(action);
+        return card;
+      }
+
+      async function startServerDownload(sourceUrl, action, card) {
+        action.disabled = true;
+        action.textContent = "Создаю задачу...";
+        setStatus("Файл готовится на сервере. После скачивания он будет удален.");
+        const res = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: sourceUrl, mode: "video", format: "mp4", quality: "best" }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          action.disabled = false;
+          action.textContent = "Подготовить файл";
+          setStatus(data.detail || "Не удалось подготовить файл.", true);
+          return;
+        }
+        pollServerJob(data.id, card);
+      }
+
+      async function pollServerJob(jobId, card) {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) {
+          card.innerHTML = "<p>Файл больше недоступен. Если нужно, запустите подготовку заново.</p>";
+          return;
+        }
+        const job = await res.json();
+        renderServerJob(job, card);
+        if (["queued", "downloading", "converting"].includes(job.status)) {
+          setTimeout(() => pollServerJob(jobId, card), 2000);
+        }
+      }
+
+      function renderServerJob(job, card) {
+        card.innerHTML = "";
+        const info = document.createElement("div");
+        const progress = job.progress ? ` · ${job.progress}%` : "";
+        info.innerHTML = `<strong>Подготовка файла</strong><p>${job.status}${progress}</p><p>${job.message || ""}</p>`;
+        card.appendChild(info);
+
+        if (job.status === "done") {
+          const link = document.createElement("a");
+          link.className = "download-link";
+          link.href = `/api/download/${job.id}`;
+          link.textContent = "Скачать файл";
+          link.onclick = () => {
+            setStatus("Скачивание началось. После выдачи файла сервер удалит копию.");
+            setTimeout(() => pollServerJob(job.id, card), 4000);
+          };
+          card.appendChild(link);
+          return;
+        }
+
+        if (job.status === "error" || job.status === "cancelled") {
+          const retry = document.createElement("button");
+          retry.className = "secondary";
+          retry.textContent = "Попробовать снова";
+          retry.onclick = () => startServerDownload(job.url, retry, card);
+          card.appendChild(retry);
         }
       }
 

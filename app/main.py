@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 from .config import DOWNLOAD_DIR, STATIC_DIR
 from .direct import build_stream_command, inspect_direct_video, resolve_direct_video_link_by_id, safe_download_filename, stream_process_stdout
@@ -167,6 +168,7 @@ def download_job_file(job_id: str):
         path=file_path,
         filename=job.file_name,
         media_type="application/octet-stream",
+        background=BackgroundTask(manager.remove_completed_job, job_id),
     )
 
 

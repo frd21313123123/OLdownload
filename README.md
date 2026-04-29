@@ -12,7 +12,8 @@ Supported sources:
 - Paste a media URL and fetch available direct video formats
 - Show video title, thumbnail, duration, format, quality, and approximate size
 - Stream the selected ready-made video file to the browser without writing it to server storage
-- Keep the older job API available for fallback/internal use
+- Fall back to a temporary server-side file when a direct single-file stream is impossible
+- Delete temporary server-side files immediately after download, or automatically 30 minutes after they are ready
 
 ## Quick start
 
@@ -40,6 +41,7 @@ Supported sources:
   - returns `{ url }` with the current temporary source media URL
 - `POST /api/download`
   - body: `{ url, mode: "audio"|"video", format, quality }`
+  - fallback job API; output is temporary and expires after 30 minutes when ready
 - `GET /api/jobs`
 - `GET /api/jobs/{id}`
 - `DELETE /api/jobs/{id}`
@@ -50,6 +52,6 @@ Supported sources:
 - This app is built for local/private use.
 - Ensure `yt-dlp` and `ffmpeg` are installed in your system PATH.
 - The main browser flow only exposes single-file formats that already contain both video and audio.
-- If a source only provides separate video/audio streams, a single direct browser download is not possible without server-side or client-side merging.
-- The legacy job API stores output files under `downloads/<job_id>/`; the main UI does not use it.
+- If a source only provides separate video/audio streams, the UI offers a fallback that temporarily prepares the file under `downloads/<job_id>/`.
+- Fallback files are removed after the response is sent to the user. If the user never downloads the prepared file, cleanup removes it 30 minutes after completion.
 - Use legally compliant sources and content only.

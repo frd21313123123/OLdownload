@@ -31,8 +31,10 @@ class DownloadManager:
         self._lock = threading.Lock()
         self._queue: "queue.Queue[str]" = queue.Queue()
         self._stop = threading.Event()
+        self._delete_timers: dict[str, threading.Timer] = {}
 
         DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        self._remove_orphaned_storage()
         self._workers = [
             threading.Thread(target=self._worker_loop, daemon=True)
             for _ in range(MAX_CONCURRENT_DOWNLOADS)
@@ -50,11 +52,13 @@ class DownloadManager:
         self._queue.put(job.id)
 
     def get_job(self, job_id: str) -> Optional[DownloadJob]:
+        self.cleanup_expired_jobs()
         with self._lock:
             state = self._jobs.get(job_id)
             return state.job if state else None
 
     def list_jobs(self) -> list[DownloadJob]:
+        self.cleanup_expired_jobs()
         with self._lock:
             return [state.job for state in self._jobs.values() if state.job.visible]
 
@@ -75,6 +79,24 @@ class DownloadManager:
                     pass
             state.job.error = None
             return True
+
+    def remove_completed_job(self, job_id: str) -> None:
+        with self._lock:
+            state = self._jobs.get(job_id)
+            if state:
+                state.job.visible = False
+                state.job.downloaded_at = datetime.now(timezone.utc)
+                state.job.updated_at = state.job.downloaded_at
+                state.job.message = "Downloaded by user"
+                self._cancel_delete_timer(job_id)
+                self._jobs.pop(job_id, None)
+        self._remove_job_storage(job_id)
+
+    def cleanup_expired_jobs(self) -> None:
+        now = datetime.now(timezone.utc)
+        to_delete = self._expired_job_ids(now)
+        for job_id in to_delete:
+            self._delete_job(job_id)
 
     def _worker_loop(self) -> None:
         while not self._stop.is_set():
@@ -212,6 +234,7 @@ class DownloadManager:
         state.job.file_size = output.stat().st_size
         state.job.progress = 100
         self._set_status(state, JobStatus.done, "Done")
+        self._schedule_completed_job_cleanup(state.job.id)
         return True
 
     def _handle_progress_line(self, state: _JobState, line: str) -> None:
@@ -234,45 +257,82 @@ class DownloadManager:
 
     def _set_status(self, state: _JobState, status: JobStatus, message: str) -> None:
         with self._lock:
+            now = datetime.now(timezone.utc)
             state.job.status = status
             state.job.message = message
-            state.job.updated_at = datetime.now(timezone.utc)
+            state.job.updated_at = now
+            if status == JobStatus.done and state.job.completed_at is None:
+                state.job.completed_at = now
 
     def _cleanup_loop(self) -> None:
         while not self._stop.is_set():
-            deadline = datetime.now(timezone.utc).timestamp()
-            to_delete = []
-            with self._lock:
-                for job_id, state in self._jobs.items():
-                    if not state.job.visible and deadline - state.job.created_at.timestamp() > JOB_TTL_SECONDS:
+            self.cleanup_expired_jobs()
+            time.sleep(CLEANUP_INTERVAL_SECONDS)
+
+    def _expired_job_ids(self, now: datetime) -> list[str]:
+        to_delete = []
+        with self._lock:
+            for job_id, state in self._jobs.items():
+                job = state.job
+                if not job.visible and now.timestamp() - job.updated_at.timestamp() >= JOB_TTL_SECONDS:
+                    to_delete.append(job_id)
+                    continue
+                if job.status == JobStatus.done and job.completed_at:
+                    if now.timestamp() - job.completed_at.timestamp() >= JOB_TTL_SECONDS:
                         to_delete.append(job_id)
                         continue
-                    if state.job.status in {JobStatus.done, JobStatus.error, JobStatus.cancelled}:
-                        if deadline - state.job.created_at.timestamp() > JOB_TTL_SECONDS:
-                            to_delete.append(job_id)
+                if job.status in {JobStatus.error, JobStatus.cancelled}:
+                    if now.timestamp() - job.updated_at.timestamp() >= JOB_TTL_SECONDS:
+                        to_delete.append(job_id)
+        return to_delete
 
-            for job_id in to_delete:
-                self._remove_job_storage(job_id)
-                with self._lock:
-                    state = self._jobs.get(job_id)
-                    if not state:
-                        continue
-                    if state.process and state.process.poll() is None:
-                        try:
-                            state.process.terminate()
-                        except Exception:
-                            pass
-                    self._jobs.pop(job_id, None)
-            time.sleep(CLEANUP_INTERVAL_SECONDS)
+    def _delete_job(self, job_id: str) -> None:
+        with self._lock:
+            self._cancel_delete_timer(job_id)
+            state = self._jobs.get(job_id)
+            if state and state.process and state.process.poll() is None:
+                try:
+                    state.process.terminate()
+                except Exception:
+                    pass
+            self._jobs.pop(job_id, None)
+        self._remove_job_storage(job_id)
+
+    def _schedule_completed_job_cleanup(self, job_id: str) -> None:
+        timer = threading.Timer(JOB_TTL_SECONDS, self._delete_job, args=[job_id])
+        timer.daemon = True
+        with self._lock:
+            self._cancel_delete_timer(job_id)
+            self._delete_timers[job_id] = timer
+        timer.start()
+
+    def _cancel_delete_timer(self, job_id: str) -> None:
+        timer = self._delete_timers.pop(job_id, None)
+        if timer:
+            timer.cancel()
 
     def _remove_job_storage(self, job_id: str) -> None:
         work_dir = DOWNLOAD_DIR / job_id
         if work_dir.exists():
             shutil.rmtree(work_dir, ignore_errors=True)
 
+    def _remove_orphaned_storage(self) -> None:
+        now = time.time()
+        for work_dir in DOWNLOAD_DIR.iterdir():
+            if not work_dir.is_dir():
+                continue
+            try:
+                if now - work_dir.stat().st_mtime >= JOB_TTL_SECONDS:
+                    shutil.rmtree(work_dir, ignore_errors=True)
+            except OSError:
+                continue
+
     def shutdown(self) -> None:
         self._stop.set()
         with self._lock:
+            for timer in self._delete_timers.values():
+                timer.cancel()
+            self._delete_timers.clear()
             for state in self._jobs.values():
                 if state.process and state.process.poll() is None:
                     try:

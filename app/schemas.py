@@ -48,6 +48,8 @@ class DownloadJob(BaseModel):
     message: str = ""
     created_at: datetime
     updated_at: datetime
+    completed_at: Optional[datetime] = None
+    downloaded_at: Optional[datetime] = None
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     error: Optional[str] = None
