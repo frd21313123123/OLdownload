@@ -374,6 +374,7 @@
               <span class="pill">MP4/WebM</span>
               <span class="pill">Без файла на сервере</span>
             </div>
+            <div id="videoDetails" class="muted" style="margin-top:12px;line-height:1.5;display:grid;gap:4px;">Вставьте ссылку, чтобы увидеть превью и детали видео.</div>
           </div>
         </aside>
 
@@ -399,6 +400,7 @@
       const resultsEl = document.getElementById("results");
       const resultCountEl = document.getElementById("resultCount");
       const formatListEl = document.getElementById("formatList");
+      const videoDetailsEl = document.getElementById("videoDetails");
 
       function setStatus(message, isError = false) {
         statusEl.textContent = message;
@@ -418,6 +420,32 @@
         return `${Math.round(bytes / 1024 / 1024)} MB`;
       }
 
+
+      function formatViews(count) {
+        if (!count) return null;
+        return new Intl.NumberFormat("ru-RU").format(count);
+      }
+
+      function renderVideoDetails(data) {
+        const details = [];
+        if (data.channel || data.uploader) details.push(`Канал: ${data.channel || data.uploader}`);
+        if (data.upload_date) details.push(`Дата публикации: ${data.upload_date}`);
+        const views = formatViews(data.view_count);
+        if (views) details.push(`Просмотры: ${views}`);
+        if (data.webpage_url) details.push(`Ссылка: ${data.webpage_url}`);
+
+        videoDetailsEl.innerHTML = "";
+        if (!details.length) {
+          videoDetailsEl.textContent = "Дополнительная информация по видео недоступна.";
+          return;
+        }
+        for (const text of details) {
+          const line = document.createElement("div");
+          line.textContent = text;
+          videoDetailsEl.appendChild(line);
+        }
+      }
+
       function renderPreview(data) {
         previewEl.hidden = false;
         previewStateEl.textContent = "Источник найден";
@@ -435,6 +463,7 @@
         const duration = formatDuration(data.duration);
         if (duration) addPill(duration);
         addPill(`${data.formats.length} вариантов`);
+        renderVideoDetails(data);
       }
 
       function addPill(text) {
@@ -598,6 +627,7 @@
         thumbEl.textContent = "Поиск";
         metaEl.innerHTML = "";
         addPill("Анализ");
+        videoDetailsEl.textContent = "Собираю информацию о видео...";
 
         try {
           const res = await fetch("/api/formats", {
@@ -625,6 +655,20 @@
       urlEl.addEventListener("keydown", (event) => {
         if (event.key === "Enter") analyze();
       });
+
+      let autoAnalyzeTimer = null;
+      function scheduleAutoAnalyze() {
+        clearTimeout(autoAnalyzeTimer);
+        const sourceUrl = urlEl.value.trim();
+        if (!sourceUrl.startsWith("http://") && !sourceUrl.startsWith("https://")) return;
+        autoAnalyzeTimer = setTimeout(() => {
+          if (!analyzeBtn.disabled) analyze();
+        }, 500);
+      }
+
+      urlEl.addEventListener("input", scheduleAutoAnalyze);
+      urlEl.addEventListener("paste", scheduleAutoAnalyze);
+
     </script>
   </body>
 </html>

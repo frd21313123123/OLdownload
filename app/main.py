@@ -86,6 +86,11 @@ def list_direct_formats(payload: FormatRequest) -> FormatResponse:
         title=media.title,
         thumbnail=media.thumbnail,
         duration=media.duration,
+        uploader=media.uploader,
+        channel=media.channel,
+        upload_date=media.upload_date,
+        view_count=media.view_count,
+        webpage_url=media.webpage_url,
         formats=[DirectFormat(**item.__dict__) for item in media.formats],
     )
 
