@@ -80,6 +80,11 @@ class FormatResponse(BaseModel):
     title: str
     thumbnail: Optional[str] = None
     duration: Optional[int] = None
+    uploader: Optional[str] = None
+    channel: Optional[str] = None
+    upload_date: Optional[str] = None
+    view_count: Optional[int] = None
+    webpage_url: Optional[str] = None
     formats: list[DirectFormat]
 
 

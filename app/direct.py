@@ -33,6 +33,11 @@ class DirectMediaInfo:
     thumbnail: str | None
     duration: int | None
     formats: list[DirectMediaFormat]
+    uploader: str | None = None
+    channel: str | None = None
+    upload_date: str | None = None
+    view_count: int | None = None
+    webpage_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,7 +51,22 @@ def inspect_direct_video(source_url: str) -> DirectMediaInfo:
     title = _clean_title(str(info.get("title") or "video"))
     thumbnail = info.get("thumbnail") if isinstance(info.get("thumbnail"), str) else None
     duration = info.get("duration") if isinstance(info.get("duration"), int) else None
-    return DirectMediaInfo(title=title, thumbnail=thumbnail, duration=duration, formats=formats)
+    uploader = info.get("uploader") if isinstance(info.get("uploader"), str) else None
+    channel = info.get("channel") if isinstance(info.get("channel"), str) else None
+    upload_date = _normalize_upload_date(info.get("upload_date"))
+    view_count = info.get("view_count") if isinstance(info.get("view_count"), int) else None
+    webpage_url = info.get("webpage_url") if isinstance(info.get("webpage_url"), str) else None
+    return DirectMediaInfo(
+        title=title,
+        thumbnail=thumbnail,
+        duration=duration,
+        uploader=uploader,
+        channel=channel,
+        upload_date=upload_date,
+        view_count=view_count,
+        webpage_url=webpage_url,
+        formats=formats,
+    )
 
 
 def resolve_direct_video_link(source_url: str, fmt: str, quality: str | None) -> DirectMediaLink:
@@ -149,6 +169,13 @@ def _resolve_source(source_url: str) -> str:
         raise ValueError("Could not resolve Spotify metadata")
     return f"ytsearch1:{fallback_query}"
 
+
+
+def _normalize_upload_date(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if len(raw) != 8 or not raw.isdigit():
+        return None
+    return f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]}"
 
 def _extract_direct_formats(formats: list[dict[str, Any]]) -> list[DirectMediaFormat]:
     direct_formats = [_to_direct_format(item) for item in formats if _is_direct_video_format(item)]
